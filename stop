@@ -1,0 +1,16 @@
+-- Этот скрипт можно запускать в любое время
+if _G.teleportEnabled ~= nil then
+    _G.teleportEnabled = false
+    print("Teleportation disabled!")
+end
+
+-- Удаляем все спавненные платформы
+if _G.spawnedParts ~= nil then
+    for _, part in pairs(_G.spawnedParts) do
+        if part and part.Parent then
+            part:Destroy()
+        end
+    end
+    _G.spawnedParts = {}
+    print("All spawned platforms removed!")
+end
