@@ -1,0 +1,101 @@
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+-- Настройки
+local startX = -52
+local startY = 54
+local startZ = 800
+local totalTeleports = 12
+local zIncrement = 800
+local platformSize = Vector3.new(10,1,10)
+local teleportDelay = 0.5
+local hoverHeight = 3
+local lastTeleport = Vector3.new(-56, -342, 9498)
+
+-- Глобальные переменные
+_G.teleportEnabled = true
+_G.spawnedParts = {}
+
+local function teleportCharacter(character)
+    local hrp = character:WaitForChild("HumanoidRootPart")
+    
+    for i = 0, totalTeleports-2 do
+        if not _G.teleportEnabled then
+            print("Teleportation stopped!")
+            for _, part in pairs(_G.spawnedParts) do
+                if part and part.Parent then
+                    part:Destroy()
+                end
+            end
+            _G.spawnedParts = {}
+            return
+        end
+
+        local pos = Vector3.new(startX, startY, startZ + i * zIncrement)
+
+        -- Спавн платформы
+        local part = Instance.new("Part")
+        part.Size = platformSize
+        part.Anchored = true
+        part.Position = pos
+        part.Parent = workspace
+        table.insert(_G.spawnedParts, part)
+
+        -- Телепорт
+        hrp.CFrame = CFrame.new(pos + Vector3.new(0, platformSize.Y/2 + hoverHeight, 0))
+
+        -- Удержание
+        local bp = Instance.new("BodyPosition")
+        bp.MaxForce = Vector3.new(1e5,1e5,1e5)
+        bp.Position = hrp.Position
+        bp.D = 100
+        bp.P = 1000
+        bp.Parent = hrp
+
+        task.wait(0.5)
+        bp:Destroy()
+
+        -- Пауза между телепортами с проверкой
+        for t = 1, teleportDelay*10 do
+            if not _G.teleportEnabled then
+                print("Teleportation stopped during delay!")
+                for _, part in pairs(_G.spawnedParts) do
+                    if part and part.Parent then
+                        part:Destroy()
+                    end
+                end
+                _G.spawnedParts = {}
+                return
+            end
+            task.wait(0.1)
+        end
+    end
+
+    if _G.teleportEnabled then
+        hrp.CFrame = CFrame.new(lastTeleport + Vector3.new(0, hoverHeight, 0))
+    end
+
+    -- После завершения телепорта удаляем платформы
+    for _, part in pairs(_G.spawnedParts) do
+        if part and part.Parent then
+            part:Destroy()
+        end
+    end
+    _G.spawnedParts = {}
+end
+
+local function startTeleportForCurrentCharacter()
+    if _G.teleportEnabled and player.Character then
+        task.spawn(function()
+            teleportCharacter(player.Character)
+        end)
+    end
+end
+
+player.CharacterAdded:Connect(function(char)
+    task.wait(1)
+    startTeleportForCurrentCharacter()
+end)
+
+-- Старт для текущего персонажа
+startTeleportForCurrentCharacter()
