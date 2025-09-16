@@ -1,0 +1,235 @@
+local Players = game:GetService("Players")
+local plr = Players.LocalPlayer
+
+-- ====== Настройки для R6 ======
+local IDS_R6 = {
+    Head = 124730194,          -- 👑 Голова (например, Valk)
+    Hair = 0,                  -- 💇 Волосы
+    FaceAccessory = 4085923851,-- 😎 Маска/очки
+    Neck = 0,                  -- 📿 На шею
+    Front = 0,                 -- 🎭 Спереди
+    Back = 14825669068,        -- 🎒 Плащ/за спину
+    Waist = 132857686458039,   -- 🌀 На пояс
+    Shoulder = 0,              -- 🧥 На плечо
+    Shirt = 3633830051,                 -- 👕 Одежда (Shirt)
+    Pants = 6400069495,                 -- 👖 Штаны (Pants)
+    TShirt = 0,                -- 👕🖼️ Футболка (TShirt)
+}
+local OFFSETS_R6 = {
+    [124730194] = {pos = Vector3.new(0, 1, 0.2), rot = Vector3.new(0, 0, 0)},         -- Голова
+    [4085923851] = {pos = Vector3.new(0, 0.3, -0.3), rot = Vector3.new(0, 0, 0)},     -- Маска
+    [14825669068] = {pos = Vector3.new(0, -0.5, 1), rot = Vector3.new(0, 180, 0)},    -- Плащ (Back)
+    [132857686458039] = {pos = Vector3.new(0, -1.6, 0.01), rot = Vector3.new(0, 180, 0)}, -- Waist
+}
+
+-- ====== Настройки для R15 ======
+local IDS_R15 = {
+    Head = 124730194,          -- 👑 Голова (например, Valk)
+    Hair = 0,                  -- 💇 Волосы
+    FaceAccessory = 4085923851,-- 😎 Маска/очки
+    Neck = 0,                  -- 📿 На шею
+    Front = 0,                 -- 🎭 Спереди
+    Back = 14825669068,        -- 🎒 Плащ/за спину
+    Waist = 132857686458039,   -- 🌀 На пояс
+    Shoulder = 0,              -- 🧥 На плечо
+    Shirt = 3633830051,                 -- 👕 Одежда (Shirt)
+    Pants = 6400069495,                 -- 👖 Штаны (Pants)
+    TShirt = 0,                -- 👕🖼️ Футболка (TShirt)
+}
+local OFFSETS_R15 = {
+    [124730194] = {pos = Vector3.new(0, 1, 0.2), rot = Vector3.new(0, 0, 0)},        
+    [4085923851] = {pos = Vector3.new(0, 0.3, -0.3), rot = Vector3.new(0, 0, 0)},    
+    [14825669068] = {pos = Vector3.new(0, -0.9, 1), rot = Vector3.new(0, 180, 0)},   
+    [132857686458039] = {pos = Vector3.new(0, -0.8, 0.01), rot = Vector3.new(0, 180, 0)}, 
+}
+
+-- === Лицо (общее) ===
+local FACE_ASSET_ID = 22828351
+local FACE_IMAGE_ID = 7074724
+
+-- --------------------------------------
+-- Общие функции
+-- --------------------------------------
+local function loadAssetFirst(id)
+    if id == 0 then return nil end
+    local ok, arr = pcall(function() return game:GetObjects("rbxassetid://"..id) end)
+    if ok and arr and #arr>0 then return arr[1] end
+    return nil
+end
+
+local function findTextureInAsset(root)
+    if not root then return nil end
+    for _,v in ipairs(root:GetDescendants()) do
+        if v:IsA("Decal") and v.Texture~="" then return v.Texture end
+    end
+    if root:IsA("Decal") and root.Texture~="" then return root.Texture end
+    return nil
+end
+
+local function getHead(character)
+    return character:FindFirstChild("Head") or character:WaitForChild("Head",3)
+end
+
+local function setHeadDecalTexture(head, texture)
+    if not head or not texture then return false end
+    local f = head:FindFirstChild("face")
+    if f and f:IsA("Decal") then
+        f.Texture = texture
+        f.Name = "face"
+    else
+        local nd = Instance.new("Decal")
+        nd.Name = "face"
+        nd.Face = Enum.NormalId.Front
+        nd.Texture = texture
+        nd.Parent = head
+    end
+    return true
+end
+
+local function addAccessoryMask(character, texture)
+    local head = getHead(character)
+    if not head then return false end
+    local accessory = Instance.new("Accessory")
+    accessory.Name = "MaskFace"
+    local handle = Instance.new("Part")
+    handle.Name = "Handle"
+    handle.Size = Vector3.new(1,1,0.05)
+    handle.Transparency = 1
+    handle.CanCollide = false
+    handle.Parent = accessory
+    local decal = Instance.new("Decal")
+    decal.Face = Enum.NormalId.Front
+    decal.Texture = texture
+    decal.Parent = handle
+    accessory.Parent = character
+    local weld = Instance.new("Weld")
+    weld.Part0 = head
+    weld.Part1 = handle
+    weld.C0 = CFrame.new(0,0,-0.5)
+    weld.Parent = handle
+    return true
+end
+
+local function firstDescendantOfClass(root, className)
+    if root.ClassName == className or root:IsA(className) then return root end
+    for _,v in ipairs(root:GetDescendants()) do
+        if v.ClassName == className or v:IsA(className) then return v end
+    end
+end
+
+local function loadAsset(id)
+    if id == 0 then return nil end
+    local ok, obj = pcall(function()
+        local t = game:GetObjects("rbxassetid://"..id)
+        return t and t[1]
+    end)
+    if not ok then return nil end
+    return obj
+end
+
+-- --------------------------------------
+-- Надевание аксессуаров/одежды
+-- --------------------------------------
+local function wearVisual(id, character, OFFSETS)
+    if id == 0 then return end
+    local obj = loadAsset(id)
+    if not obj then return end
+
+    local handle = obj:FindFirstChild("Handle") or obj:FindFirstChildWhichIsA("BasePart")
+    if handle and OFFSETS[id] then
+        obj.Parent = character
+        handle.Anchored = false
+        handle.CanCollide = false
+
+        local weld = Instance.new("Weld")
+        local attachPart = character:FindFirstChild("Head")
+
+        if id == IDS_R6.Back or id == IDS_R15.Back then
+            attachPart = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+        elseif id == IDS_R6.Waist or id == IDS_R15.Waist then
+            attachPart = character:FindFirstChild("Torso") or character:FindFirstChild("LowerTorso")
+        end
+
+        weld.Part0 = attachPart
+        weld.Part1 = handle
+        local offset = OFFSETS[id]
+        weld.C0 = CFrame.new(offset.pos) * CFrame.Angles(
+            math.rad(offset.rot.X),
+            math.rad(offset.rot.Y),
+            math.rad(offset.rot.Z)
+        )
+        weld.Parent = handle
+        return
+    end
+
+    -- 👕 Одежда
+    local shirt = firstDescendantOfClass(obj, "Shirt")
+    local pants = firstDescendantOfClass(obj, "Pants")
+    local tshirt = firstDescendantOfClass(obj, "ShirtGraphic")
+
+    if shirt then
+        local old = character:FindFirstChildOfClass("Shirt")
+        if old then old:Destroy() end
+        shirt.Parent = character
+    elseif pants then
+        local old = character:FindFirstChildOfClass("Pants")
+        if old then old:Destroy() end
+        pants.Parent = character
+    elseif tshirt then
+        local old = character:FindFirstChildOfClass("ShirtGraphic")
+        if old then old:Destroy() end
+        tshirt.Parent = character
+    end
+
+    pcall(function() if obj and obj.Parent == nil then obj:Destroy() end end)
+end
+
+-- --------------------------------------
+-- Основная функция
+-- --------------------------------------
+local function applyAll(character)
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+
+    local IDS, OFFSETS
+    if humanoid.RigType == Enum.HumanoidRigType.R6 then
+        IDS, OFFSETS = IDS_R6, OFFSETS_R6
+        print("[CUSTOM] Обнаружен R6")
+    else
+        IDS, OFFSETS = IDS_R15, OFFSETS_R15
+        print("[CUSTOM] Обнаружен R15")
+    end
+
+    -- Лицо
+    local texture = nil
+    local assetObj = loadAssetFirst(FACE_ASSET_ID)
+    if assetObj then texture = findTextureInAsset(assetObj) end
+    if not texture and FACE_IMAGE_ID then
+        texture = "rbxassetid://"..FACE_IMAGE_ID
+    end
+    if texture then
+        local ok = setHeadDecalTexture(getHead(character), texture)
+        if not ok then
+            addAccessoryMask(character, texture)
+        end
+    end
+
+    -- Одежда + аксессуары
+    for slot, id in pairs(IDS) do
+        wearVisual(id, character, OFFSETS)
+        task.wait(0.1)
+    end
+end
+
+-- --------------------------------------
+-- Авто-применение при спавне
+-- --------------------------------------
+if plr.Character then
+    task.wait(0.2)
+    applyAll(plr.Character)
+end
+
+plr.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    applyAll(char)
+end)
